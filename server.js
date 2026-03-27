@@ -7,32 +7,29 @@ const OpenAI = require("openai");
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 const upload = multer({ dest: "uploads/" });
 
-// 💖 ROOMS + VOTES + USER BLOCK
+// ROOMS
 const rooms = {};
 const votes = {};
 const votedUsers = {};
 
-// 🔥 CREATE ROOM
+// CREATE ROOM
 app.get("/create-room", (req, res) => {
   const roomId = Math.random().toString(36).substring(2, 8);
-
   rooms[roomId] = [];
   votes[roomId] = { leave: 0, run: 0 };
   votedUsers[roomId] = {};
-
   res.json({ roomId });
 });
 
-// 🔥 GET MESSAGES
+// GET MESSAGES
 app.get("/room/:id", (req, res) => {
   res.json(rooms[req.params.id] || []);
 });
 
-// 🔥 SEND MESSAGE
+// SEND MESSAGE
 app.post("/room/:id", (req, res) => {
   const { message } = req.body;
 
@@ -41,11 +38,10 @@ app.post("/room/:id", (req, res) => {
   }
 
   rooms[req.params.id].push(message);
-
   res.json({ success: true });
 });
 
-// 🔥 VOTING (1 user = 1 vote)
+// VOTE
 app.post("/vote/:id", (req, res) => {
   const { type, userId } = req.body;
 
@@ -64,27 +60,26 @@ app.post("/vote/:id", (req, res) => {
   res.json(votes[req.params.id]);
 });
 
-// 🔥 GET VOTES
+// GET VOTES
 app.get("/vote/:id", (req, res) => {
   res.json(votes[req.params.id] || { leave: 0, run: 0 });
 });
 
-// 🔑 OPENAI
+// OPENAI
 const openai = new OpenAI({
   apiKey: "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"
 });
 
-// 🔥 ANALYZE
+// ANALYZE
 app.post("/analyze", upload.single("image"), async (req, res) => {
   try {
     const roastMode = req.body.roastMode === "true";
-    const context = req.body.context || "";
 
     if (!req.file) {
       return res.status(400).json({ error: "Brak pliku" });
     }
 
-    // 📸 OCR API
+    // OCR
     const imageBuffer = fs.readFileSync(req.file.path);
 
     const ocrRes = await fetch("https://api.ocr.space/parse/image", {
@@ -103,10 +98,9 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
     const text =
       ocrData?.ParsedResults?.[0]?.ParsedText || "Brak tekstu";
 
-    // 🧹 usuń plik
     fs.unlinkSync(req.file.path);
 
-    // 🛑 fallback jeśli OCR słaby
+    // fallback
     if (!text || text.length < 5) {
       return res.json({
         score: "?",
@@ -116,7 +110,7 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
       });
     }
 
-    // 🤖 AI ANALIZA
+    // AI
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
@@ -127,10 +121,7 @@ Przeanalizuj tę rozmowę:
 
 "${text}"
 
-Kontekst:
-"${context}"
-
-Tryb: ${roastMode ? "ROAST (śmieszny, genzie vibe, trochę złośliwy 😏)" : "NORMAL"}
+Tryb: ${roastMode ? "ROAST (śmieszny 😏)" : "NORMAL"}
 
 Zwróć JSON:
 {
@@ -148,7 +139,6 @@ ODPOWIEDZ TYLKO JSON.
 
     let aiText = completion.choices[0].message.content;
 
-    // 🔥 CLEAN JSON
     const start = aiText.indexOf("{");
     const end = aiText.lastIndexOf("}");
 
@@ -171,16 +161,15 @@ ODPOWIEDZ TYLKO JSON.
 
     res.json(parsed);
 
-  } catch (error) {
-    console.error("❌ ERROR:", error);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Błąd serwera" });
   }
 });
 
-// 🚀 START (RENDER SAFE)
+// START
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log("Server działa");
-});
 });
