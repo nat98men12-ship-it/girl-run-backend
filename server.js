@@ -80,25 +80,29 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
     }
 
     // OCR
-    const imageBuffer = fs.readFileSync(req.file.path);
+    let text = "Brak tekstu";
 
-    const ocrRes = await fetch("https://api.ocr.space/parse/image", {
-      method: "POST",
-      headers: {
-        apikey: "K86012982788957"
-      },
-      body: new URLSearchParams({
-        base64Image: "data:image/png;base64," + imageBuffer.toString("base64"),
-        language: "eng"
-      })
-    });
+try {
+  const imageBuffer = fs.readFileSync(req.file.path);
 
-    const ocrData = await ocrRes.json();
+  const ocrRes = await fetch("https://api.ocr.space/parse/image", {
+    method: "POST",
+    headers: {
+      apikey: "K86012982788957"
+    },
+    body: new URLSearchParams({
+      base64Image: "data:image/png;base64," + imageBuffer.toString("base64"),
+      language: "eng"
+    })
+  });
 
-    const text =
-      ocrData?.ParsedResults?.[0]?.ParsedText || "Brak tekstu";
+  const ocrData = await ocrRes.json();
 
-    fs.unlinkSync(req.file.path);
+  text = ocrData?.ParsedResults?.[0]?.ParsedText || "Brak tekstu";
+
+} catch (err) {
+  console.log("OCR ERROR:", err);
+}
 
     // fallback
     if (!text || text.length < 5) {
