@@ -1,7 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 const fs = require("fs");
 const OpenAI = require("openai");
 
@@ -55,7 +54,6 @@ app.post("/vote/:id", (req, res) => {
     votedUsers[req.params.id] = {};
   }
 
-  // blokada głosu
   if (votedUsers[req.params.id][userId]) {
     return res.json({ error: "Już głosowałaś 😏" });
   }
@@ -86,26 +84,39 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
       return res.status(400).json({ error: "Brak pliku" });
     }
 
+    // 📸 OCR API
     const imageBuffer = fs.readFileSync(req.file.path);
 
-const ocrRes = await fetch("https://api.ocr.space/parse/image", {
-  method: "POST",
-  headers: {
-    apikey: "K86012982788957"
-  },
-  body: new URLSearchParams({
-    base64Image: "data:image/png;base64," + imageBuffer.toString("base64"),
-    language: "eng"
-    language: "pl"
-  })
-});
+    const ocrRes = await fetch("https://api.ocr.space/parse/image", {
+      method: "POST",
+      headers: {
+        apikey: "K86012982788957"
+      },
+      body: new URLSearchParams({
+        base64Image: "data:image/png;base64," + imageBuffer.toString("base64"),
+        language: "eng"
+      })
+    });
 
-const ocrData = await ocrRes.json();
+    const ocrData = await ocrRes.json();
 
-const text =
-  ocrData.ParsedResults?.[0]?.ParsedText || "Brak tekstu";
-  fs.unlinkSync(req.file.path);
+    const text =
+      ocrData?.ParsedResults?.[0]?.ParsedText || "Brak tekstu";
 
+    // 🧹 usuń plik
+    fs.unlinkSync(req.file.path);
+
+    // 🛑 fallback jeśli OCR słaby
+    if (!text || text.length < 5) {
+      return res.json({
+        score: "?",
+        type: "Nieczytelne",
+        flags: [],
+        roast: "Girl... nic tu nie widać 💀"
+      });
+    }
+
+    // 🤖 AI ANALIZA
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [
@@ -119,7 +130,7 @@ Przeanalizuj tę rozmowę:
 Kontekst:
 "${context}"
 
-Tryb: ${roastMode ? "ROAST (śmieszny, genzie vibe)" : "NORMAL"}
+Tryb: ${roastMode ? "ROAST (śmieszny, genzie vibe, trochę złośliwy 😏)" : "NORMAL"}
 
 Zwróć JSON:
 {
@@ -153,20 +164,23 @@ ODPOWIEDZ TYLKO JSON.
       return res.json({
         score: "?",
         type: "AI error",
-        flags: aiText,
-        roast: ""
+        flags: [],
+        roast: aiText
       });
     }
 
     res.json(parsed);
 
   } catch (error) {
-    console.error(error);
+    console.error("❌ ERROR:", error);
     res.status(500).json({ error: "Błąd serwera" });
   }
 });
 
-// 🚀 START
-app.listen(3000, () => {
-  console.log("Server działa na http://localhost:3000");
+// 🚀 START (RENDER SAFE)
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log("Server działa");
+});
 });
