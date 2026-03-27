@@ -1,7 +1,8 @@
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const Tesseract = require("tesseract.js");
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+const fs = require("fs");
 const OpenAI = require("openai");
 
 const app = express();
@@ -85,8 +86,25 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
       return res.status(400).json({ error: "Brak pliku" });
     }
 
-    const result = await Tesseract.recognize(req.file.path, "eng");
-    const text = result.data.text;
+    const imageBuffer = fs.readFileSync(req.file.path);
+
+const ocrRes = await fetch("https://api.ocr.space/parse/image", {
+  method: "POST",
+  headers: {
+    apikey: "K86012982788957"
+  },
+  body: new URLSearchParams({
+    base64Image: "data:image/png;base64," + imageBuffer.toString("base64"),
+    language: "eng"
+    language: "pl"
+  })
+});
+
+const ocrData = await ocrRes.json();
+
+const text =
+  ocrData.ParsedResults?.[0]?.ParsedText || "Brak tekstu";
+  fs.unlinkSync(req.file.path);
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
@@ -101,7 +119,7 @@ Przeanalizuj tę rozmowę:
 Kontekst:
 "${context}"
 
-Tryb: ${roastMode ? "ROAST (śmieszny, ostry)" : "NORMAL"}
+Tryb: ${roastMode ? "ROAST (śmieszny, genzie vibe)" : "NORMAL"}
 
 Zwróć JSON:
 {
